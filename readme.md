@@ -40,7 +40,7 @@ docker push registry.gitlab.com/namespace/sast-scanner:latest
 Para escanear um projeto, basta executar:
 
 ```sh
-docker run --rm -v /caminho/do/projeto:/app/code sast-scanner
+docker run --rm -v $(pwd):/app/code sast-scanner
 ```
 
 Isso fará a análise de segurança no projeto localizado em `/caminho/do/projeto`.
