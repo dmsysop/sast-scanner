@@ -1,0 +1,12 @@
+stages:
+  - sast
+
+sast:
+  stage: sast
+  image: my-sast-image:latest
+  script:
+    - docker run --rm -v $(pwd):/app/code my-sast-image
+  artifacts:
+    paths:
+      - cache.json
+    expire_in: 1 week
