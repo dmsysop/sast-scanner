@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+ARG SEMGREP_APP_TOKEN
+ENV SEMGREP_APP_TOKEN=$SEMGREP_APP_TOKEN
+
 # Instala dependências do sistema
 RUN apt-get update && apt-get install -y \
     curl \
@@ -27,13 +30,12 @@ WORKDIR /app
 COPY cache.json /app/cache.json
 COPY sast_scanner.py /app/sast_scanner.py
 COPY entrypoint.sh /app/entrypoint.sh
-COPY .env /app/.env
 
 # Garante que o entrypoint tenha permissões de execução
 RUN chmod +x /app/entrypoint.sh
 
 # Faz login no Semgrep CLI
-RUN SEMGREP_APP_TOKEN=ee8efe4b184c0a545ff78dd9496ea4997db56eaa40b7ee38e9cd2afbf1a40f11 semgrep login
+RUN SEMGREP_APP_TOKEN=$SEMGREP_APP_TOKEN semgrep login
 
 # Define o entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
