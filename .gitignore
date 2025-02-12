@@ -2,4 +2,4 @@
 .*.env
 
 
-settings.json
+.vscode
