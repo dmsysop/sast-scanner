@@ -1,6 +1,6 @@
 # 📌 Documentação do SAST Scanner com Docker
 
-Este documento descreve como **construir, utilizar e integrar** o SAST Scanner baseado em Docker para analisar projetos Python e PHP.
+Este documento descreve como **construir, utilizar e integrar** o SAST Scanner baseado em Docker para analisar projetos Python, PHP e JavaScript.
 
 ---
 
@@ -9,7 +9,7 @@ Este documento descreve como **construir, utilizar e integrar** o SAST Scanner b
 Antes de utilizar o scanner, é necessário criar a imagem Docker. Execute:
 
 ```sh
-docker build -t sast-scanner .
+./build.sh
 ```
 
 Isso criará a imagem **sast-scanner** com todas as ferramentas necessárias.
@@ -37,14 +37,23 @@ docker push registry.gitlab.com/namespace/sast-scanner:latest
 
 ## 🛠 3. Como Executar a Varredura
 
-Para escanear um projeto, basta executar:
+Para escanear um projeto, basta executar na pasta onde estão seus projetos:
 
 ```sh
-docker run --rm -v $(pwd):/app/code sast-scanner
+docker run --rm -v "$(pwd)/projeto:/app/projeto" sast-scanner scan projeto
 ```
 
 Isso fará a análise de segurança no projeto localizado em `/caminho/do/projeto`.
 
+ATENÇÃO: Os 3 parametros "projeto" devem ser iguais!
+
+Alternativamente, você pode usar:
+
+```sh
+./scanner.sh projeto
+```
+
+Lembrando novamente que este script deve ficar FORA da pasta do projeto!
 ---
 
 ## 🔄 4. Integração com GitLab CI/CD
@@ -59,7 +68,7 @@ sast:
   stage: sast
   image: sast-scanner:latest
   script:
-    - docker run --rm -v $(pwd):/app/code sast-scanner
+    - docker run --rm -v $(pwd):/app/seu_projeto sast-scanner scan seu_projeto
   artifacts:
     paths:
       - cache.json
@@ -79,11 +88,11 @@ Isso garantirá que o scanner seja executado automaticamente antes da publicaç�
 2. **Faça as alterações desejadas** no código.
 3. **Reconstrua a imagem:**
    ```sh
-   docker build -t sast-scanner .
+   ./build.sh
    ```
 4. **Teste localmente:**
    ```sh
-   docker run --rm -v /caminho/do/projeto:/app/code sast-scanner
+   docker run --rm -v /caminho/do/projeto:/app/projeto sast-scanner scan projeto
    ```
 5. **Envie um Pull Request!**
 
@@ -93,4 +102,3 @@ Isso garantirá que o scanner seja executado automaticamente antes da publicaç�
 Se encontrar problemas ou tiver sugestões, entre em contato pelo [GitLab Issues](https://gitlab.com/dmsysop/sast-scanner/issues).
 
 🚀 **Happy Scanning!**
-
