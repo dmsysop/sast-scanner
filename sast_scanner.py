@@ -140,7 +140,8 @@ def run_owasp_zap_scan(target_url):
     print(f"🔍 Rodando OWASP ZAP (DAST) contra {target_url}...")
     zap_command = [
         "docker", "run", "--rm", "--network=host",
-        "owasp/zap2docker-stable", "zap-cli", "quick-scan",
+        # "owasp/zap2docker-stable", "zap-cli", "quick-scan",
+        "zaproxy/zap-stable", "zap-cli", "quick-scan",
         "--self-contained", target_url
     ]
     
