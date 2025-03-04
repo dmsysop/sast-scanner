@@ -4,6 +4,7 @@ import json
 import atexit
 import hashlib
 import subprocess
+import requests
 from pathlib import Path
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -17,6 +18,7 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 SCAN_DIR = f"/app/{destination}"
+TARGET_URL = os.getenv("TARGET_URL") #Defnir se vou passar por parametro ou via .env
 
 # Definir configurações do MongoDB
 MONGO_URI = os.getenv("MONGO_URI")
@@ -35,24 +37,20 @@ if MONGO_URI:
         client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         db = client.get_database(MONGO_DB_NAME)
         
-        # Criar o nome da coleção com base no destino
         collection_name = f"{destination}_{MONGO_COLLECTION}"
         
-        # Verificar o comprimento do nome da coleção e garantir que não ultrapasse 255 caracteres
         if len(collection_name) > 255:
             raise ValueError(f"Nome da coleção `{collection_name}` excede o limite de 255 caracteres.")
         
         cache_collection = db.get_collection(collection_name)
 
-        # Verificar se a coleção existe e está vazia
         if cache_collection.count_documents({}) == 0:
             print(f"⚠ Criando a coleção `{collection_name}`")
         else:
             print(f"⚠ Coleção `{collection_name}` encontrada!")
 
 
-        # Testar a conexão
-        client.server_info()  # Isso força uma conexão para validar a URI
+        client.server_info()
         print("✅ Conectado ao MongoDB Atlas")
 
     except Exception as e:
@@ -61,7 +59,6 @@ if MONGO_URI:
 else:
     print("⚠ MongoDB não configurado. Cache será ignorado.")
 
-# Garantir fechamento da conexão ao encerrar o script
 def close_mongo_connection():
     if client:
         client.close()
@@ -69,12 +66,10 @@ def close_mongo_connection():
 atexit.register(close_mongo_connection)
 
 def calculate_hash(file_path):
-    # Verifica se o caminho é um arquivo regular e não um diretório
     if not os.path.isfile(file_path):
         print(f"⚠ Ignorando diretório: {file_path}")
-        return None  # Retorna None ou outro valor adequado para indicar que o hash não foi calculado
+        return None
 
-    # Se for um arquivo, calcula o hash
     hasher = hashlib.sha256()
     try:
         with open(file_path, 'rb') as f:
@@ -84,12 +79,10 @@ def calculate_hash(file_path):
         print(f"❌ Erro ao calcular hash para o arquivo {file_path}: {e}")
         return None
     
-# Definindo a função para verificar a conexão
 def check_conn():
     if cache_collection is None:
         print("⚠ Aviso: `cache_collection` está None. O cache não será salvo!")
         return
-    # Testando a conexão com o MongoDB
     print("🔬 Testando leitura do MongoDB...")
     try:
         cache_collection.count_documents({})
@@ -101,7 +94,6 @@ def get_cache():
         print("⚠ Aviso: `cache_collection` está None. O cache não será salvo!")
         return {}
     
-    # Carregar o cache como um dicionário, onde a chave é o file_path e o valor é o hash
     return {doc["file_path"]: doc["hash"] for doc in cache_collection.find({}, {"_id": 0, "file_path": 1, "hash": 1})}
 
 def update_cache(file_path, file_hash):
@@ -143,6 +135,44 @@ def install_dependencies():
     if Path(SCAN_DIR, "composer.json").exists():
         print("📦 Instalando dependências PHP...")
         run_command(["composer", "install"], cwd=SCAN_DIR)
+
+def run_owasp_zap_scan(target_url):
+    print(f"🔍 Rodando OWASP ZAP (DAST) contra {target_url}...")
+    zap_command = [
+        "docker", "run", "--rm", "--network=host",
+        "owasp/zap2docker-stable", "zap-cli", "quick-scan",
+        "--self-contained", target_url
+    ]
+    
+    try:
+        result = subprocess.run(zap_command, check=True, capture_output=True, text=True)
+        print(result.stdout)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"⚠ Erro ao executar OWASP ZAP: {e.stderr}")
+        return False
+
+def get_zap_results():
+    zap_results_url = "http://localhost:8080/JSON/core/view/alerts/"
+    response = requests.get(zap_results_url)
+    
+    if response.status_code == 200:
+        alerts = response.json()
+        with open("zap_results.json", "w") as f:
+            json.dump(alerts, f, indent=4)
+        print("✅ Resultados do OWASP ZAP salvos em zap_results.json")
+        return alerts.get("alerts", [])
+    else:
+        print(f"⚠ Erro ao obter resultados do ZAP: {response.status_code}")
+        return []
+
+def check_vulnerabilities(alerts):
+    severe_issues = [alert for alert in alerts if int(alert.get("risk", "0")) >= 2]  # Risco 2 (Médio) ou maior
+    if severe_issues:
+        print("❌ Falhas graves detectadas! Bloqueando deploy.")
+        sys.exit(1)
+    else:
+        print("✅ Nenhuma falha crítica encontrada. Deploy permitido.")
 
 def run_sast_scan():
     if not Path(SCAN_DIR).exists():
@@ -199,5 +229,23 @@ def run_sast_scan():
 
     print("✅ Análise concluída!")
 
+def run_dast_scan():
+    if not Path(SCAN_DIR).exists():
+        print(f"❌ Erro: Nenhum diretório montado em /app/{destination}")
+        return
+    
+    if TARGET_URL:
+        if run_owasp_zap_scan(TARGET_URL):
+            alerts = get_zap_results()
+            check_vulnerabilities(alerts)
+        else:
+            print("⚠ OWASP ZAP falhou. Prosseguindo com cautela.")
+    else:
+        print("⚠ TARGET_URL não definida. Pulando OWASP ZAP scan.")
+    
+    print("✅ Análise concluída!")
+
+
 if __name__ == "__main__":
     run_sast_scan()
+    run_dast_scan()
